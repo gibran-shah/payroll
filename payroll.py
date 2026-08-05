@@ -92,6 +92,66 @@ lcf = 0.00
 
 t1 = max(0, t3 - (pay_periods * lcf))
 
+# T4127 Step 4:
+# Select Alberta tax rate (V) and constant (KP)
+if annual_taxable_income <= 148269:
+    if annual_taxable_income <= 111733:
+        alberta_rate = 0.10
+        alberta_constant = 0.00
+    else:
+        alberta_rate = 0.12
+        alberta_constant = 2514.00
+elif annual_taxable_income <= 177922:
+    alberta_rate = 0.13
+    alberta_constant = 3997.00
+elif annual_taxable_income <= 237230:
+    alberta_rate = 0.14
+    alberta_constant = 5776.00
+elif annual_taxable_income <= 355845:
+    alberta_rate = 0.15
+    alberta_constant = 8148.00
+else:
+    alberta_rate = 0.15
+    alberta_constant = 8148.00
+    
+# Alberta factor K1P:
+# Provincial non-refundable personal tax credit
+alberta_claim_amount = 21885.00
+
+k1p = 0.10 * alberta_claim_amount
+
+# Alberta factor K2P:
+# Provincial tax credit for base CPP contributions
+alberta_lowest_tax_rate = 0.10
+
+k2p = alberta_lowest_tax_rate * annual_base_cpp
+
+# Other Alberta non-refundable tax credits
+k3p = 0.00
+
+# T4127 Step 4:
+# Annual basic Alberta tax
+t4 = (
+    alberta_rate * annual_taxable_income
+    - alberta_constant
+    - k1p
+    - k2p
+    - k3p
+)
+
+# T4127 Step 5:
+# Annual Alberta tax payable
+t2 = t4
+
+# T4127 Step 6:
+# Tax deductions for the monthly pay period
+additional_tax = 0.00  # Factor L
+
+federal_tax = t1 / pay_periods
+alberta_tax = t2 / pay_periods
+
+total_tax = federal_tax + alberta_tax + additional_tax
+
 print(f"Total:  ${total:,.2f}")
 print(f"GST:    ${gst:,.2f}")
 print(f"Earned: ${earned:,.2f}")
@@ -111,3 +171,13 @@ print(f"Canada Employment Amount: ${canada_employment_amount:,.2f}")
 print(f"Federal employment credit (K4): ${k4:,.2f}")
 print(f"Basic federal tax (T3):   ${t3:,.2f}")
 print(f"Annual federal tax (T1):  ${t1:,.2f}")
+print(f"Alberta rate (V):          {alberta_rate:.1%}")
+print(f"Alberta constant (KP):     ${alberta_constant:,.2f}")
+print(f"Alberta claim amount (TCP): ${alberta_claim_amount:,.2f}")
+print(f"Alberta tax credit (K1P):   ${k1p:,.2f}")
+print(f"Alberta CPP credit (K2P): ${k2p:,.2f}")
+print(f"Basic Alberta tax (T4):   ${t4:,.2f}")
+print(f"Annual Alberta tax (T2):  ${t2:,.2f}")
+print(f"Federal tax for pay period: ${federal_tax:,.2f}")
+print(f"Alberta tax for pay period: ${alberta_tax:,.2f}")
+print(f"Total tax for pay period:   ${total_tax:,.2f}")
