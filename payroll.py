@@ -95,24 +95,20 @@ t1 = max(0, t3 - (pay_periods * lcf))
 # T4127 Step 4:
 # Select Alberta tax rate (V) and constant (KP)
 if annual_taxable_income <= 148269:
-    if annual_taxable_income <= 111733:
-        alberta_rate = 0.10
-        alberta_constant = 0.00
-    else:
-        alberta_rate = 0.12
-        alberta_constant = 2514.00
+    alberta_rate = 0.10
+    alberta_constant = 0.00
 elif annual_taxable_income <= 177922:
-    alberta_rate = 0.13
-    alberta_constant = 3997.00
+    alberta_rate = 0.12
+    alberta_constant = 2965.00
 elif annual_taxable_income <= 237230:
-    alberta_rate = 0.14
-    alberta_constant = 5776.00
+    alberta_rate = 0.13
+    alberta_constant = 4745.00
 elif annual_taxable_income <= 355845:
-    alberta_rate = 0.15
-    alberta_constant = 8148.00
+    alberta_rate = 0.14
+    alberta_constant = 7117.00
 else:
     alberta_rate = 0.15
-    alberta_constant = 8148.00
+    alberta_constant = 10675.00
     
 # Alberta factor K1P:
 # Provincial non-refundable personal tax credit
@@ -129,7 +125,6 @@ k2p = alberta_lowest_tax_rate * annual_base_cpp
 # Other Alberta non-refundable tax credits
 k3p = 0.00
 
-# T4127 Step 4:
 # Annual basic Alberta tax
 t4 = (
     alberta_rate * annual_taxable_income
