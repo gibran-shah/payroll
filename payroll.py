@@ -1,3 +1,47 @@
+CRA = {
+    2024: {
+        # Pay periods
+        "pay_periods": 12,
+
+        # CPP
+        "cpp_rate": 0.0595,
+        "cpp_basic_exemption": 3500.00,
+        "monthly_cpp_exemption": 291.66,
+        "cpp_first_additional_rate": 0.0100,
+        "max_annual_base_cpp": 3217.50,
+
+        # Federal
+        "federal_claim_amount": 15705.00,
+        "canada_employment_amount": 1433.00,
+        
+        # (upper income limit, tax rate, constant)
+        "federal_brackets": [
+            (55867, 0.15, 0.00),
+            (111733, 0.205, 3072.69),
+            (173205, 0.26, 9217.99),
+            (246752, 0.29, 14414.14),
+            (float("inf"), 0.33, 24284.22),
+        ],
+
+        # Alberta
+        "alberta_claim_amount": 21885.00,
+        "alberta_lowest_tax_rate": 0.10,
+        
+        # (upper income limit, tax rate, constant)
+        "alberta_brackets": [
+            (148269, 0.10, 0.00),
+            (177922, 0.12, 2965.00),
+            (237230, 0.13, 4745.00),
+            (355845, 0.14, 7117.00),
+            (float("inf"), 0.15, 10675.00),
+        ],
+    }
+}
+
+cra = CRA[2024]
+
+
+
 def calculate_cpp(amount, cpp_rate, monthly_cpp_exemption):
     return max(
         0,
@@ -17,14 +61,21 @@ def calculate_payroll(
     )
 
     return payroll_before_employer_cpp - estimated_employer_cpp
+    
+def get_tax_bracket(annual_taxable_income, brackets):
+    for upper_limit, rate, constant in brackets:
+        if annual_taxable_income <= upper_limit:
+            return rate, constant
+
+    raise ValueError("No tax bracket found")
 
 total = float(input("Enter total including GST: $"))
 
 gst = total / 21
 earned = total - gst
 
-cpp_rate = 0.0595
-monthly_cpp_exemption = 291.66
+cpp_rate = cra["cpp_rate"]
+monthly_cpp_exemption = cra["monthly_cpp_exemption"]
 
 payroll = calculate_payroll(
     earned,
@@ -40,11 +91,11 @@ employee_cpp = calculate_cpp(
 
 employer_cpp = employee_cpp
 
-pay_periods = 12
+pay_periods = cra["pay_periods"]
 
 # T4127 factor F5:
 # Deductible additional CPP contribution
-cpp_first_additional_rate = 0.0100
+cpp_first_additional_rate = cra["cpp_first_additional_rate"]
 
 f5 = employee_cpp * (cpp_first_additional_rate / cpp_rate)
 
@@ -52,32 +103,21 @@ f5 = employee_cpp * (cpp_first_additional_rate / cpp_rate)
 # Annual taxable income (A)
 annual_taxable_income = pay_periods * (payroll - f5)
 
-if annual_taxable_income <= 55867:
-    federal_rate = 0.15
-    federal_constant = 0.00
-elif annual_taxable_income <= 111733:
-    federal_rate = 0.205
-    federal_constant = 3072.69
-elif annual_taxable_income <= 173205:
-    federal_rate = 0.26
-    federal_constant = 9217.99
-elif annual_taxable_income <= 246752:
-    federal_rate = 0.29
-    federal_constant = 14414.14
-else:
-    federal_rate = 0.33
-    federal_constant = 24284.22
+federal_rate, federal_constant = get_tax_bracket(
+    annual_taxable_income,
+    cra["federal_brackets"]
+)
     
 # T4127 factor K1:
 # Federal non-refundable personal tax credit
-federal_claim_amount = 15705.00
+federal_claim_amount = cra["federal_claim_amount"]
 
 k1 = 0.15 * federal_claim_amount
 
 # T4127 factor K2:
 # Federal tax credit for base CPP contributions
 base_cpp_rate = 0.0495
-max_annual_base_cpp = 3217.50
+max_annual_base_cpp = cra["max_annual_base_cpp"]
 
 annual_base_cpp = min(
     base_cpp_rate * ((pay_periods * payroll) - 3500),
@@ -88,7 +128,7 @@ k2 = 0.15 * annual_base_cpp
 
 # T4127 factor K4:
 # Federal Canada Employment Amount tax credit
-canada_employment_amount = 1433.00
+canada_employment_amount = cra["canada_employment_amount"]
 
 k4 = min(
     0.15 * (pay_periods * payroll),
@@ -116,31 +156,20 @@ t1 = max(0, t3 - (pay_periods * lcf))
 
 # T4127 Step 4:
 # Select Alberta tax rate (V) and constant (KP)
-if annual_taxable_income <= 148269:
-    alberta_rate = 0.10
-    alberta_constant = 0.00
-elif annual_taxable_income <= 177922:
-    alberta_rate = 0.12
-    alberta_constant = 2965.00
-elif annual_taxable_income <= 237230:
-    alberta_rate = 0.13
-    alberta_constant = 4745.00
-elif annual_taxable_income <= 355845:
-    alberta_rate = 0.14
-    alberta_constant = 7117.00
-else:
-    alberta_rate = 0.15
-    alberta_constant = 10675.00
+alberta_rate, alberta_constant = get_tax_bracket(
+    annual_taxable_income,
+    cra["alberta_brackets"]
+)
     
 # Alberta factor K1P:
 # Provincial non-refundable personal tax credit
-alberta_claim_amount = 21885.00
+alberta_claim_amount = cra["alberta_claim_amount"]
 
 k1p = 0.10 * alberta_claim_amount
 
 # Alberta factor K2P:
 # Provincial tax credit for base CPP contributions
-alberta_lowest_tax_rate = 0.10
+alberta_lowest_tax_rate = cra["alberta_lowest_tax_rate"]
 
 k2p = alberta_lowest_tax_rate * annual_base_cpp
 
