@@ -1,3 +1,23 @@
+def calculate_cpp(amount, cpp_rate, monthly_cpp_exemption):
+    return max(
+        0,
+        (amount - monthly_cpp_exemption) * cpp_rate
+    )
+
+
+def calculate_payroll(
+    payroll_before_employer_cpp,
+    cpp_rate,
+    monthly_cpp_exemption
+):
+    estimated_employer_cpp = calculate_cpp(
+        payroll_before_employer_cpp,
+        cpp_rate,
+        monthly_cpp_exemption
+    )
+
+    return payroll_before_employer_cpp - estimated_employer_cpp
+
 total = float(input("Enter total including GST: $"))
 
 gst = total / 21
@@ -6,15 +26,17 @@ earned = total - gst
 cpp_rate = 0.0595
 monthly_cpp_exemption = 291.66
 
-estimated_employer_cpp = (
-    earned - monthly_cpp_exemption
-) * cpp_rate
+payroll = calculate_payroll(
+    earned,
+    cpp_rate,
+    monthly_cpp_exemption
+)
 
-payroll = earned - estimated_employer_cpp
-
-employee_cpp = (
-    payroll - monthly_cpp_exemption
-) * cpp_rate
+employee_cpp = calculate_cpp(
+    payroll,
+    cpp_rate,
+    monthly_cpp_exemption
+)
 
 employer_cpp = employee_cpp
 
@@ -150,7 +172,7 @@ total_tax = federal_tax + alberta_tax + additional_tax
 print(f"Total:  ${total:,.2f}")
 print(f"GST:    ${gst:,.2f}")
 print(f"Earned: ${earned:,.2f}")
-print(f"Estimated employer CPP: ${estimated_employer_cpp:,.2f}")
+#print(f"Estimated employer CPP: ${estimated_employer_cpp:,.2f}")
 print(f"Payroll:                ${payroll:,.2f}")
 print(f"Employee CPP:           ${employee_cpp:,.2f}")
 print(f"Employer CPP:           ${employer_cpp:,.2f}")
