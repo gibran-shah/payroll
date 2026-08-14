@@ -137,6 +137,55 @@ def calculate_federal_tax(payroll, employee_cpp, cra):
 
     return federal_tax, annual_taxable_income, annual_base_cpp
 
+def calculate_alberta_tax(
+    annual_taxable_income,
+    annual_base_cpp,
+    cra
+):
+    pay_periods = cra["pay_periods"]
+
+    # Alberta tax bracket
+    alberta_rate, alberta_constant = get_tax_bracket(
+        annual_taxable_income,
+        cra["alberta_brackets"]
+    )
+
+    # T4127 factor K1P:
+    # Alberta non-refundable personal tax credit
+    alberta_claim_amount = cra["alberta_claim_amount"]
+
+    k1p = cra["alberta_lowest_tax_rate"] * alberta_claim_amount
+
+    # T4127 factor K2P:
+    # Alberta tax credit for base CPP contributions
+    k2p = cra["alberta_lowest_tax_rate"] * annual_base_cpp
+
+    # T4127 Step 4:
+    # Basic Alberta tax
+    k3p = 0.00
+
+    t4 = (
+        alberta_rate * annual_taxable_income
+        - alberta_constant
+        - k1p
+        - k2p
+        - k3p
+    )
+
+    # T4127 Step 5:
+    # Annual Alberta tax payable
+    #lcp = 0.00
+
+    #t2 = max(0, t4 - (pay_periods * lcp))
+    
+    t2 = t4
+
+    # T4127 Step 6:
+    # Alberta tax for the pay period
+    alberta_tax = t2 / pay_periods
+
+    return alberta_tax
+
 total = float(input("Enter total including GST: $"))
 
 gst = total / 21
@@ -165,48 +214,13 @@ federal_tax, annual_taxable_income, annual_base_cpp = calculate_federal_tax(
     cra
 )
 
-# T4127 Step 4:
-# Select Alberta tax rate (V) and constant (KP)
-alberta_rate, alberta_constant = get_tax_bracket(
+alberta_tax = calculate_alberta_tax(
     annual_taxable_income,
-    cra["alberta_brackets"]
-)
-    
-# Alberta factor K1P:
-# Provincial non-refundable personal tax credit
-alberta_claim_amount = cra["alberta_claim_amount"]
-
-k1p = 0.10 * alberta_claim_amount
-
-# Alberta factor K2P:
-# Provincial tax credit for base CPP contributions
-alberta_lowest_tax_rate = cra["alberta_lowest_tax_rate"]
-
-k2p = alberta_lowest_tax_rate * annual_base_cpp
-
-# Other Alberta non-refundable tax credits
-k3p = 0.00
-
-# Annual basic Alberta tax
-t4 = (
-    alberta_rate * annual_taxable_income
-    - alberta_constant
-    - k1p
-    - k2p
-    - k3p
+    annual_base_cpp,
+    cra
 )
 
-# T4127 Step 5:
-# Annual Alberta tax payable
-t2 = t4
-
-# T4127 Step 6:
-# Tax deductions for the monthly pay period
-additional_tax = 0.00  # Factor L
-
-alberta_tax = t2 / cra["pay_periods"]
-
-total_tax = federal_tax + alberta_tax + additional_tax
+total_tax = federal_tax + alberta_tax
 
 print(f"Total:  ${total:,.2f}")
 print(f"GST:    ${gst:,.2f}")
@@ -227,13 +241,13 @@ print(f"Annual base CPP:          ${annual_base_cpp:,.2f}")
 #print(f"Federal employment credit (K4): ${k4:,.2f}")
 #print(f"Basic federal tax (T3):   ${t3:,.2f}")
 #print(f"Annual federal tax (T1):  ${t1:,.2f}")
-print(f"Alberta rate (V):          {alberta_rate:.1%}")
-print(f"Alberta constant (KP):     ${alberta_constant:,.2f}")
-print(f"Alberta claim amount (TCP): ${alberta_claim_amount:,.2f}")
-print(f"Alberta tax credit (K1P):   ${k1p:,.2f}")
-print(f"Alberta CPP credit (K2P): ${k2p:,.2f}")
-print(f"Basic Alberta tax (T4):   ${t4:,.2f}")
-print(f"Annual Alberta tax (T2):  ${t2:,.2f}")
+#print(f"Alberta rate (V):          {alberta_rate:.1%}")
+#print(f"Alberta constant (KP):     ${alberta_constant:,.2f}")
+#print(f"Alberta claim amount (TCP): ${alberta_claim_amount:,.2f}")
+#print(f"Alberta tax credit (K1P):   ${k1p:,.2f}")
+#print(f"Alberta CPP credit (K2P): ${k2p:,.2f}")
+#print(f"Basic Alberta tax (T4):   ${t4:,.2f}")
+#print(f"Annual Alberta tax (T2):  ${t2:,.2f}")
 print(f"Federal tax for pay period: ${federal_tax:,.2f}")
 print(f"Alberta tax for pay period: ${alberta_tax:,.2f}")
 print(f"Total tax for pay period:   ${total_tax:,.2f}")
