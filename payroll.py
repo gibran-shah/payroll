@@ -69,18 +69,39 @@ def get_tax_bracket(annual_taxable_income, brackets):
 
     raise ValueError("No tax bracket found")
     
-def calculate_federal_tax(payroll, employee_cpp, cra):
+def calculate_tax_inputs(payroll, employee_cpp, cra):
     pay_periods = cra["pay_periods"]
 
     # T4127 factor F5:
     # Deductible additional CPP contribution
     cpp_first_additional_rate = cra["cpp_first_additional_rate"]
 
-    f5 = employee_cpp * (cpp_first_additional_rate / cra["cpp_rate"])
+    f5 = employee_cpp * (
+        cpp_first_additional_rate / cra["cpp_rate"]
+    )
 
     # T4127 Step 1:
     # Annual taxable income (A)
     annual_taxable_income = pay_periods * (payroll - f5)
+
+    # T4127 factor K2:
+    # Federal tax credit for base CPP contributions
+    base_cpp_rate = 0.0495
+    max_annual_base_cpp = cra["max_annual_base_cpp"]
+
+    annual_base_cpp = min(
+        base_cpp_rate * ((pay_periods * payroll) - 3500),
+        max_annual_base_cpp
+    )
+
+    return annual_taxable_income, annual_base_cpp
+    
+def calculate_federal_tax(payroll, employee_cpp, cra):
+    pay_periods = cra["pay_periods"]
+
+    # T4127 factor F5:
+    # Deductible additional CPP contribution
+    cpp_first_additional_rate = cra["cpp_first_additional_rate"]
 
     federal_rate, federal_constant = get_tax_bracket(
         annual_taxable_income,
@@ -135,7 +156,7 @@ def calculate_federal_tax(payroll, employee_cpp, cra):
 
     federal_tax = t1 / pay_periods
 
-    return federal_tax, annual_taxable_income, annual_base_cpp
+    return federal_tax
 
 def calculate_alberta_tax(
     annual_taxable_income,
@@ -208,7 +229,13 @@ employee_cpp = calculate_cpp(
 
 employer_cpp = employee_cpp
 
-federal_tax, annual_taxable_income, annual_base_cpp = calculate_federal_tax(
+annual_taxable_income, annual_base_cpp = calculate_tax_inputs(
+    payroll,
+    employee_cpp,
+    cra
+)
+
+federal_tax = calculate_federal_tax(
     payroll,
     employee_cpp,
     cra
