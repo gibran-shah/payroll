@@ -9,6 +9,7 @@ CRA = {
         "monthly_cpp_exemption": 291.66,
         "cpp_first_additional_rate": 0.0100,
         "max_annual_base_cpp": 3217.50,
+        "base_cpp_rate": 0.0495,
 
         # Federal
         "federal_claim_amount": 15705.00,
@@ -25,7 +26,6 @@ CRA = {
 
         # Alberta
         "alberta_claim_amount": 21885.00,
-        "alberta_lowest_tax_rate": 0.10,
         
         # (upper income limit, tax rate, constant)
         "alberta_brackets": [
@@ -86,11 +86,14 @@ def calculate_tax_inputs(payroll, employee_cpp, cra):
 
     # T4127 factor K2:
     # Federal tax credit for base CPP contributions
-    base_cpp_rate = 0.0495
+    base_cpp_rate = cra["base_cpp_rate"]
+    cpp_basic_exemption = cra["cpp_basic_exemption"]
     max_annual_base_cpp = cra["max_annual_base_cpp"]
 
     annual_base_cpp = min(
-        base_cpp_rate * ((pay_periods * payroll) - 3500),
+        base_cpp_rate * (
+            (pay_periods * payroll) - cpp_basic_exemption
+        ),
         max_annual_base_cpp
     )
 
@@ -111,8 +114,9 @@ def calculate_federal_tax(payroll, employee_cpp, cra):
     # T4127 factor K1:
     # Federal non-refundable personal tax credit
     federal_claim_amount = cra["federal_claim_amount"]
+    federal_lowest_tax_rate = cra["federal_brackets"][0][1]
 
-    k1 = 0.15 * federal_claim_amount
+    k1 = federal_lowest_tax_rate * federal_claim_amount
 
     # T4127 factor K2:
     # Federal tax credit for base CPP contributions
@@ -124,15 +128,15 @@ def calculate_federal_tax(payroll, employee_cpp, cra):
         max_annual_base_cpp
     )
 
-    k2 = 0.15 * annual_base_cpp
+    k2 = federal_lowest_tax_rate * annual_base_cpp
 
     # T4127 factor K4:
     # Federal Canada Employment Amount tax credit
     canada_employment_amount = cra["canada_employment_amount"]
 
     k4 = min(
-        0.15 * (pay_periods * payroll),
-        0.15 * canada_employment_amount
+        federal_lowest_tax_rate * (pay_periods * payroll),
+        federal_lowest_tax_rate * canada_employment_amount
     )
 
     # T4127 Step 2:
@@ -174,12 +178,13 @@ def calculate_alberta_tax(
     # T4127 factor K1P:
     # Alberta non-refundable personal tax credit
     alberta_claim_amount = cra["alberta_claim_amount"]
+    alberta_lowest_tax_rate = cra["alberta_brackets"][0][1]
 
-    k1p = cra["alberta_lowest_tax_rate"] * alberta_claim_amount
+    k1p = alberta_lowest_tax_rate * alberta_claim_amount
 
     # T4127 factor K2P:
     # Alberta tax credit for base CPP contributions
-    k2p = cra["alberta_lowest_tax_rate"] * annual_base_cpp
+    k2p = alberta_lowest_tax_rate * annual_base_cpp
 
     # T4127 Step 4:
     # Basic Alberta tax
