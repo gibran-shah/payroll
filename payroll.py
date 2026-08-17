@@ -1,9 +1,9 @@
 CRA = {
     2024: {
-        # Pay periods
+        # Number of pay periods in the year.
         "pay_periods": 12,
 
-        # CPP
+        # CPP constants.
         "cpp_rate": 0.0595,
         "cpp_basic_exemption": 3500.00,
         "monthly_cpp_exemption": 291.66,
@@ -11,10 +11,11 @@ CRA = {
         "max_annual_base_cpp": 3217.50,
         "base_cpp_rate": 0.0495,
 
-        # Federal
+        # Federal tax constants.
         "federal_claim_amount": 15705.00,
         "canada_employment_amount": 1433.00,
         
+        # Federal tax brackets:
         # (upper income limit, tax rate, constant)
         "federal_brackets": [
             (55867, 0.15, 0.00),
@@ -27,6 +28,7 @@ CRA = {
         # Alberta
         "alberta_claim_amount": 21885.00,
         
+        # Alberta tax brackets:
         # (upper income limit, tax rate, constant)
         "alberta_brackets": [
             (148269, 0.10, 0.00),
@@ -38,11 +40,13 @@ CRA = {
     }
 }
 
+# Select the CRA parameters for the year being calculated.
 cra = CRA[2024]
 
 
 
 def calculate_cpp(amount, cpp_rate, monthly_cpp_exemption):
+    """Calculate CPP for a single pay period."""
     return max(
         0,
         (amount - monthly_cpp_exemption) * cpp_rate
@@ -54,6 +58,7 @@ def calculate_payroll(
     cpp_rate,
     monthly_cpp_exemption
 ):
+    """Calculate payroll after reserving the employer's CPP contribution."""
     estimated_employer_cpp = calculate_cpp(
         payroll_before_employer_cpp,
         cpp_rate,
@@ -63,6 +68,7 @@ def calculate_payroll(
     return payroll_before_employer_cpp - estimated_employer_cpp
     
 def get_tax_bracket(annual_taxable_income, brackets):
+    """Return the tax rate and bracket constant for the given income."""
     for upper_limit, rate, constant in brackets:
         if annual_taxable_income <= upper_limit:
             return rate, constant
@@ -70,9 +76,9 @@ def get_tax_bracket(annual_taxable_income, brackets):
     raise ValueError("No tax bracket found")
     
 def calculate_tax_inputs(payroll, employee_cpp, cra):
+    """Calculate annual values shared by federal and Alberta tax calculations."""
     pay_periods = cra["pay_periods"]
 
-    # T4127 factor F5:
     # Deductible additional CPP contribution
     cpp_first_additional_rate = cra["cpp_first_additional_rate"]
 
@@ -80,11 +86,9 @@ def calculate_tax_inputs(payroll, employee_cpp, cra):
         cpp_first_additional_rate / cra["cpp_rate"]
     )
 
-    # T4127 Step 1:
-    # Annual taxable income (A)
+    # Annual taxable income
     annual_taxable_income = pay_periods * (payroll - f5)
 
-    # T4127 factor K2:
     # Federal tax credit for base CPP contributions
     base_cpp_rate = cra["base_cpp_rate"]
     cpp_basic_exemption = cra["cpp_basic_exemption"]
@@ -99,13 +103,15 @@ def calculate_tax_inputs(payroll, employee_cpp, cra):
 
     return annual_taxable_income, annual_base_cpp
     
-def calculate_federal_tax(payroll, employee_cpp, cra):
+def calculate_federal_tax(
+    annual_taxable_income,
+    annual_base_cpp,
+    payroll
+):
+    """Calculate federal income tax for one pay period."""
     pay_periods = cra["pay_periods"]
 
-    # T4127 factor F5:
-    # Deductible additional CPP contribution
-    cpp_first_additional_rate = cra["cpp_first_additional_rate"]
-
+    # T4127: Select the federal tax bracket for annual taxable income.
     federal_rate, federal_constant = get_tax_bracket(
         annual_taxable_income,
         cra["federal_brackets"]
@@ -118,16 +124,6 @@ def calculate_federal_tax(payroll, employee_cpp, cra):
 
     k1 = federal_lowest_tax_rate * federal_claim_amount
 
-    # T4127 factor K2:
-    # Federal tax credit for base CPP contributions
-    base_cpp_rate = 0.0495
-    max_annual_base_cpp = cra["max_annual_base_cpp"]
-
-    annual_base_cpp = min(
-        base_cpp_rate * ((pay_periods * payroll) - 3500),
-        max_annual_base_cpp
-    )
-
     k2 = federal_lowest_tax_rate * annual_base_cpp
 
     # T4127 factor K4:
@@ -139,10 +135,9 @@ def calculate_federal_tax(payroll, employee_cpp, cra):
         federal_lowest_tax_rate * canada_employment_amount
     )
 
-    # T4127 Step 2:
-    # Basic federal tax
     k3 = 0.00
 
+    # Calculate basic federal tax (T3).
     t3 = (
         federal_rate * annual_taxable_income
         - federal_constant
@@ -152,10 +147,9 @@ def calculate_federal_tax(payroll, employee_cpp, cra):
         - k4
     )
 
-    # T4127 Step 3:
-    # Annual federal tax payable
     lcf = 0.00
 
+    # Calculate annual federal tax payable (T1).
     t1 = max(0, t3 - (pay_periods * lcf))
 
     federal_tax = t1 / pay_periods
@@ -164,32 +158,31 @@ def calculate_federal_tax(payroll, employee_cpp, cra):
 
 def calculate_alberta_tax(
     annual_taxable_income,
-    annual_base_cpp,
-    cra
+    annual_base_cpp
 ):
+    """Calculate Alberta income tax for one pay period."""
     pay_periods = cra["pay_periods"]
 
-    # Alberta tax bracket
+    # T4127: Select the Alberta tax bracket.
     alberta_rate, alberta_constant = get_tax_bracket(
         annual_taxable_income,
         cra["alberta_brackets"]
     )
 
     # T4127 factor K1P:
-    # Alberta non-refundable personal tax credit
+    # Alberta non-refundable personal tax credit.
     alberta_claim_amount = cra["alberta_claim_amount"]
     alberta_lowest_tax_rate = cra["alberta_brackets"][0][1]
 
     k1p = alberta_lowest_tax_rate * alberta_claim_amount
 
     # T4127 factor K2P:
-    # Alberta tax credit for base CPP contributions
+    # Alberta tax credit for base CPP contributions.
     k2p = alberta_lowest_tax_rate * annual_base_cpp
 
-    # T4127 Step 4:
-    # Basic Alberta tax
     k3p = 0.00
 
+    # Calculate basic Alberta tax (T4).
     t4 = (
         alberta_rate * annual_taxable_income
         - alberta_constant
@@ -197,63 +190,65 @@ def calculate_alberta_tax(
         - k2p
         - k3p
     )
-
-    # T4127 Step 5:
-    # Annual Alberta tax payable
-    #lcp = 0.00
-
-    #t2 = max(0, t4 - (pay_periods * lcp))
     
+    # Annual Alberta tax payable (T2).
     t2 = t4
 
-    # T4127 Step 6:
-    # Alberta tax for the pay period
+    # Convert annual Alberta tax to the current pay period.
     alberta_tax = t2 / pay_periods
 
     return alberta_tax
 
+
+# Begin program
+
 total = float(input("Enter total including GST: $"))
 
+# Calculate the GST portion of the amount received.
 gst = total / 21
+
+# Amount remaining after GST.
 earned = total - gst
 
+# Get the CPP parameters for the selected CRA year.
 cpp_rate = cra["cpp_rate"]
 monthly_cpp_exemption = cra["monthly_cpp_exemption"]
 
+# Calculate payroll after reserving the employer's CPP contribution.
 payroll = calculate_payroll(
     earned,
     cpp_rate,
     monthly_cpp_exemption
 )
 
+# Calculate employee CPP on the resulting payroll.
 employee_cpp = calculate_cpp(
     payroll,
     cpp_rate,
     monthly_cpp_exemption
 )
 
+# Employer CPP is equal to the employee CPP contribution.
 employer_cpp = employee_cpp
 
+# Calculate annual values required by both federal and Alberta tax.
 annual_taxable_income, annual_base_cpp = calculate_tax_inputs(
     payroll,
     employee_cpp,
     cra
 )
 
-federal_tax = calculate_federal_tax(
-    payroll,
-    employee_cpp,
-    cra
-)
+# Calculate federal and Alberta income tax.
+federal_tax = calculate_federal_tax(annual_taxable_income, annual_base_cpp, payroll)
+alberta_tax = calculate_alberta_tax(annual_taxable_income, annual_base_cpp)
 
-alberta_tax = calculate_alberta_tax(
-    annual_taxable_income,
-    annual_base_cpp,
-    cra
-)
-
+# Combine federal and Alberta tax.
 total_tax = federal_tax + alberta_tax
 
+
+# Output
+
+# Optional diagnostic output for validating individual T4127 calculations.
 print(f"Total:  ${total:,.2f}")
 print(f"GST:    ${gst:,.2f}")
 print(f"Earned: ${earned:,.2f}")
