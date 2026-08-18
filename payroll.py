@@ -1,5 +1,7 @@
+from datetime import date, datetime
+
 CRA = {
-    2024: {
+    date(2024, 1, 1): {
         # Number of pay periods in the year.
         "pay_periods": 12,
 
@@ -40,10 +42,26 @@ CRA = {
     }
 }
 
-# Select the CRA parameters for the year being calculated.
-cra = CRA[2024]
 
+def get_cra_parameters(payroll_date):
+    """Return the CRA parameters effective on the payroll date."""
 
+    effective_dates = sorted(CRA.keys())
+
+    applicable_dates = [
+        effective_date
+        for effective_date in effective_dates
+        if effective_date <= payroll_date
+    ]
+
+    if not applicable_dates:
+        raise ValueError(
+            f"No CRA parameters available for {payroll_date}."
+        )
+
+    latest_effective_date = applicable_dates[-1]
+
+    return CRA[latest_effective_date]
 
 def calculate_cpp(amount, cpp_rate, monthly_cpp_exemption):
     """Calculate CPP for a single pay period."""
@@ -202,7 +220,44 @@ def calculate_alberta_tax(
 
 # Begin program
 
-total = float(input("Enter total including GST: $"))
+# get date
+while True:
+    date_input = input(
+        f"Enter payroll date (YYYY-MM-DD) [default: {date.today()}]: "
+    ).strip()
+
+    if not date_input:
+        payroll_date = date.today()
+        break
+
+    try:
+        payroll_date = datetime.strptime(
+            date_input,
+            "%Y-%m-%d"
+        ).date()
+        break
+    except ValueError:
+        print("Invalid date. Please enter the date as YYYY-MM-DD.")
+
+# Select the CRA parameters for the year being calculated.
+cra = get_cra_parameters(payroll_date)
+
+# get total
+while True:
+    total_input = input("Enter total including GST: $").strip()
+
+    try:
+        total = float(total_input)
+
+        if total < 0:
+            print("Total cannot be negative.")
+            continue
+
+        break
+    except ValueError:
+        print("Invalid amount. Please enter a number.")
+    
+print(f"Payroll date: {payroll_date}")
 
 # Calculate the GST portion of the amount received.
 gst = total / 21
