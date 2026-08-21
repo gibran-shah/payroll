@@ -184,8 +184,13 @@ def get_tax_bracket(annual_taxable_income, brackets):
 def calculate_ei(amount, ei_rate, max_annual_ei, pay_periods):
     """Calculate EI premiums for a single pay period."""
 
+    annual_insurable_earnings = min(
+        pay_periods * payroll,
+        cra["ei_max_annual_insurable_earnings"]
+    )
+    
     annual_ei = min(
-        ei_rate * (pay_periods * amount),
+        ei_rate * annual_insurable_earnings,
         max_annual_ei
     )
 
@@ -252,7 +257,11 @@ def calculate_federal_tax(
 
     k1 = federal_lowest_tax_rate * federal_claim_amount
 
-    k2 = federal_lowest_tax_rate * annual_base_cpp
+    # T4127 factor K2:
+    # Federal tax credit for base CPP contributions and EI premiums.
+    k2 = federal_lowest_tax_rate * (
+        annual_base_cpp + annual_ei
+    )
 
     # T4127 factor K4:
     # Federal Canada Employment Amount tax credit
@@ -306,8 +315,10 @@ def calculate_alberta_tax(
     k1p = alberta_lowest_tax_rate * alberta_claim_amount
 
     # T4127 factor K2P:
-    # Alberta tax credit for base CPP contributions.
-    k2p = alberta_lowest_tax_rate * annual_base_cpp
+    # Alberta tax credit for base CPP contributions and EI premiums.
+    k2p = alberta_lowest_tax_rate * (
+        annual_base_cpp + annual_ei
+    )
 
     k3p = 0.00
 
