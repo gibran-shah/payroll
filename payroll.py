@@ -99,11 +99,10 @@ CRA = {
 
         # (upper income limit, tax rate, constant)
         "alberta_brackets": [
-            (60000, 0.10, 0.00),
-            (151234, 0.12, 3025.00),
-            (181481, 0.13, 4839.00),
-            (241974, 0.14, 7259.00),
-            (362961, 0.15, 10889.00),
+            (151234, 0.10, 0.00),
+            (181481, 0.12, 3025.00),
+            (241974, 0.13, 4839.00),
+            (362961, 0.14, 7259.00),
             (float("inf"), 0.15, 10889.00),
         ],
     }
@@ -137,27 +136,30 @@ def calculate_cpp(amount, cpp_rate, monthly_cpp_exemption):
         (amount - monthly_cpp_exemption) * cpp_rate
     )
 
-def calculate_cpp2(payroll):
-    """Calculate estimated CPP2 for a single pay period."""
+def calculate_cpp2(payroll, payroll_date, cra):
+    """Calculate CPP2 for the current pay period."""
 
-    pay_periods = cra["pay_periods"]
+    completed_months = payroll_date.month - 1
 
-    annual_payroll = pay_periods * payroll
+    ytd_pensionable_earnings = (
+        completed_months * payroll
+    )
 
-    annual_cpp2_earnings = min(
+    total_pensionable_earnings = (
+        ytd_pensionable_earnings + payroll
+    )
+
+    cpp2_earnings = min(
         max(
             0,
-            annual_payroll - cra["cpp_ympe"]
+            total_pensionable_earnings - cra["cpp_ympe"]
         ),
         cra["cpp2_yampe"] - cra["cpp_ympe"]
     )
 
-    annual_cpp2 = min(
-        annual_cpp2_earnings * cra["cpp2_rate"],
-        cra["cpp2_max_annual_contribution"]
-    )
+    cpp2 = cpp2_earnings * cra["cpp2_rate"]
 
-    return annual_cpp2 / pay_periods
+    return cpp2
 
 def calculate_payroll(
     payroll_before_employer_cpp,
@@ -185,7 +187,7 @@ def calculate_ei(amount, ei_rate, max_annual_ei, pay_periods):
     """Calculate EI premiums for a single pay period."""
 
     annual_insurable_earnings = min(
-        pay_periods * payroll,
+        pay_periods * amount,
         cra["ei_max_annual_insurable_earnings"]
     )
     
@@ -233,12 +235,12 @@ def calculate_tax_inputs(payroll, employee_cpp, employee_cpp2):
         max_annual_ei
     )
 
-    return annual_taxable_income, annual_base_cpp, annual_ei
+    return annual_taxable_income, annual_base_cpp, annual_ei, f5
     
 def calculate_federal_tax(
     annual_taxable_income,
     annual_base_cpp,
-    annual_base_ei,
+    annual_ei,
     payroll
 ):
     """Calculate federal income tax for one pay period."""
@@ -249,6 +251,9 @@ def calculate_federal_tax(
         annual_taxable_income,
         cra["federal_brackets"]
     )
+    
+    print(f"Federal rate:          {federal_rate:.3%}")
+    print(f"Federal constant:      ${federal_constant:,.2f}")
 
     # T4127 factor K1:
     # Federal non-refundable personal tax credit
@@ -256,12 +261,16 @@ def calculate_federal_tax(
     federal_lowest_tax_rate = cra["federal_brackets"][0][1]
 
     k1 = federal_lowest_tax_rate * federal_claim_amount
+    
+    print(f"Federal K1:            ${k1:,.2f}")
 
     # T4127 factor K2:
     # Federal tax credit for base CPP contributions and EI premiums.
     k2 = federal_lowest_tax_rate * (
         annual_base_cpp + annual_ei
     )
+    
+    print(f"Federal K2:             ${k2:,.2f}")
 
     # T4127 factor K4:
     # Federal Canada Employment Amount tax credit
@@ -271,6 +280,8 @@ def calculate_federal_tax(
         federal_lowest_tax_rate * (pay_periods * payroll),
         federal_lowest_tax_rate * canada_employment_amount
     )
+    
+    print(f"Federal k4:             ${k4:,.2f}")
 
     k3 = 0.00
 
@@ -284,10 +295,14 @@ def calculate_federal_tax(
         - k4
     )
 
+    print(f"Federal t3:             ${t3:,.2f}")
+
     lcf = 0.00
 
     # Calculate annual federal tax payable (T1).
     t1 = max(0, t3 - (pay_periods * lcf))
+    
+    print(f"Federal t1:             ${t1:,.2f}")
 
     federal_tax = t1 / pay_periods
 
@@ -296,7 +311,7 @@ def calculate_federal_tax(
 def calculate_alberta_tax(
     annual_taxable_income,
     annual_base_cpp,
-    annual_base_ei
+    annual_ei
 ):
     """Calculate Alberta income tax for one pay period."""
     pay_periods = cra["pay_periods"]
@@ -306,6 +321,9 @@ def calculate_alberta_tax(
         annual_taxable_income,
         cra["alberta_brackets"]
     )
+    
+    print(f"Alberta rate:          {alberta_rate:.3%}")
+    print(f"Alberta constant:      ${alberta_constant:,.2f}")
 
     # T4127 factor K1P:
     # Alberta non-refundable personal tax credit.
@@ -313,12 +331,16 @@ def calculate_alberta_tax(
     alberta_lowest_tax_rate = cra["alberta_brackets"][0][1]
 
     k1p = alberta_lowest_tax_rate * alberta_claim_amount
+    
+    print(f"Alberta K1P:            ${k1p:,.2f}")
 
     # T4127 factor K2P:
     # Alberta tax credit for base CPP contributions and EI premiums.
     k2p = alberta_lowest_tax_rate * (
         annual_base_cpp + annual_ei
     )
+    
+    print(f"Alberta K2P:             ${k2p:,.2f}")
 
     k3p = 0.00
 
@@ -330,6 +352,8 @@ def calculate_alberta_tax(
         - k2p
         - k3p
     )
+    
+    print(f"Alberta t4:             ${t4:,.2f}")
     
     # Annual Alberta tax payable (T2).
     t2 = t4
@@ -409,7 +433,7 @@ employee_cpp = calculate_cpp(
 employer_cpp = employee_cpp
 
 # Calculate employee CPP2 on the resulting payroll.
-employee_cpp2 = calculate_cpp2(payroll)
+employee_cpp2 = calculate_cpp2(payroll, payroll_date, cra)
 
 # Employer CPP2 is equal to the employee CPP2 contribution.
 employer_cpp2 = employee_cpp2
@@ -427,11 +451,13 @@ employee_ei = calculate_ei(
 )
 
 # Calculate annual values required by both federal and Alberta tax.
-annual_taxable_income, annual_base_cpp, annual_ei = calculate_tax_inputs(
+annual_taxable_income, annual_base_cpp, annual_ei, f5 = calculate_tax_inputs(
     payroll,
     employee_cpp,
     employee_cpp2
 )
+
+print(f"F5:                    ${f5:,.2f}")
 
 # Calculate federal and Alberta income tax.
 federal_tax = calculate_federal_tax(annual_taxable_income, annual_base_cpp, annual_ei, payroll)
